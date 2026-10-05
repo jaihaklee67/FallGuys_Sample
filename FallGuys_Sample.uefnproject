@@ -1,0 +1,123 @@
+{
+	"fileVersion": 15,
+	"title": "FallGuys_Sample",
+	"description": "",
+	"keyArt": "Resources/Icon128.png",
+	"docsUrl": "",
+	"apiAccess": "Private",
+	"bindings":
+	{
+		"projectId": "8dfa046d-3a9d-4b1f-b35b-d954074b71ec",
+		"modules":
+		{
+			"FallGuys_Sample": "5fb30cb2-aece-4214-8b8c-aefbaa2014dd"
+		},
+		"bSuppressAutomaticVersePathAssignment": false,
+		"projectVersePath": "/jaihaklee@fortnite.com/FallGuys_Sample"
+	},
+	"compatibilityVersion": "42.30",
+	"requiredRedirectorStartingVersion": "42.10.57819926",
+	"editorPermissions": [],
+	"epicApp": "",
+	"sortPriority": 0,
+	"featureSet": "BeanstalkGFS",
+	"plugins": [
+		{
+			"name": "FallGuys_Sample",
+			"bIsRoot": true,
+			"bIsPublic": false
+		}
+	],
+	"dataSets":
+	{
+		"matchmaking":
+		{
+			"maxPlayers": 16,
+			"maxTeamCount": 16,
+			"maxTeamSize": 16,
+			"maxSocialPartySize": 16,
+			"allowJoinInProgress": true,
+			"allowSquadFillOption": false,
+			"islandQueuePrivacy": "Unrestricted",
+			"minPlayers": 1,
+			"overtimePlayerTarget": 1,
+			"queueMainDuration": 5,
+			"queueOvertimeDuration": 5,
+			"useSkillBasedMatchmaking": false,
+			"ratingType": "",
+			"splitscreenDisabled": false,
+			"version": 1
+		},
+		"experimental":
+		{
+			"sceneGraph":
+			{
+				"bIsSceneGraphSystemAllowed": true,
+				"bEnableOneFilePerEntity": false
+			},
+			"version": 1,
+			"DefaultPawn":
+			{
+				"bUseDefaultCharacter": true
+			},
+			"pythonExperimental":
+			{
+				"bEnablePythonForProject": true
+			},
+			"toolsets":
+			{
+				"bEnableToolsetsForProject": true
+			}
+		},
+		"ugcLocalization":
+		{
+			"nativeCulture": "en",
+			"culturesToGenerate": [
+				"ar",
+				"de",
+				"en",
+				"es",
+				"es-419",
+				"fr",
+				"id",
+				"it",
+				"ja",
+				"ko",
+				"pl",
+				"pt-BR",
+				"ru",
+				"th",
+				"tr",
+				"vi",
+				"zh-Hans",
+				"zh-Hant"
+			],
+			"poFormat": "Unreal"
+		},
+		"autoLocalization":
+		{
+			"bAutoBuildLocalization": true,
+			"cultures": [
+				"ar",
+				"de",
+				"en",
+				"es",
+				"es-419",
+				"fr",
+				"id",
+				"it",
+				"ja",
+				"ko",
+				"pl",
+				"pt-BR",
+				"ru",
+				"th",
+				"tr",
+				"vi",
+				"zh-Hans",
+				"zh-Hant"
+			],
+			"mode": "Untranslated"
+		}
+	}
+}

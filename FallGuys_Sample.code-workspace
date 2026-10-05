@@ -1,0 +1,50 @@
+{
+    "folders": [
+        {
+            "name": "/jaihaklee@fortnite.com/FallGuys_Sample (FallGuys_Sample)",
+            "path": "C:/Users/PC/Documents/Fortnite Projects/FallGuys_Sample/Content"
+        },
+        {
+            "name": "/jaihaklee@fortnite.com/FallGuys_Sample (FallGuys_Sample/Assets)",
+            "path": "C:/Users/PC/AppData/Local/UnrealEditorFortnite/Saved/VerseProject/FallGuys_Sample/Digests/FallGuys_Sample-Assets"
+        },
+        {
+            "name": "vproject (read-only)",
+            "path": "C:/Users/PC/AppData/Local/UnrealEditorFortnite/Saved/VerseProject/FallGuys_Sample/vproject"
+        },
+        {
+            "name": "Built-in Digests",
+            "path": "C:/Users/PC/AppData/Local/UnrealEditorFortnite/Saved/VerseProject/FallGuys_Sample/Digests/BuiltIn"
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/*.uasset": true,
+            "**/*.umap": true,
+            "**/*.png": true,
+            "**/*.jpg": true,
+            "**/*.tga": true,
+            "_INT": true,
+            "**/*.vproject": true,
+            "__ExternalActors__": true,
+            "__ExternalObjects__": true,
+            "Collections": true,
+            "Developers": true
+        },
+        "files.autoSave": "onWindowChange",
+        "workbench.colorTheme": "Verse (Dark)",
+        "editor.bracketPairColorization.enabled": false,
+        "editor.acceptSuggestionOnEnter": "off"
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Verse Debug",
+                "type": "verse",
+                "request": "attach",
+                "debugServer": 1961
+            }
+        ]
+    }
+}

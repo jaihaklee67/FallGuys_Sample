@@ -1,0 +1,9 @@
+# UEFN / Unreal 로컬 캐시와 빌드 결과물
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+.lore/
+.vs/
+.vscode/
+*.log
