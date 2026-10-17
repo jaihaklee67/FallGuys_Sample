@@ -23,17 +23,18 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 
 | 폴더 | 들어 있는 것 |
 |---|---|
-| `GameFlow/Start` | 플레이어 스포너 8개, HUD Controller(기본 HUD 숨김) |
-| `GameFlow/Checkpoints` | 체크포인트 패드 4개 |
-| `GameFlow/Finish` | `race_manager`, End Game Device, Trigger, Score Manager |
-| `GameFlow/Sound` | `sfx_manager`와 Audio Player 10개(아래 표) |
+| `GameFlow/Start` | `Spawner_1~8`, `HUD_Controller`(기본 HUD 숨김) |
+| `GameFlow/Checkpoints` | `Checkpoint_1~4` |
+| `GameFlow/Finish` | `race_manager`, `Finish_EndGame`, `Finish_Trigger`, `Finish_Score` |
+| `GameFlow/Sound` | `music_manager`, `sfx_manager`와 Audio Player 12개(아래 표) |
 | `SeesawHazards` | 시소 위 범퍼 기둥 8개(`SS_Pole_1~8`), 바운서 2개(`BNC_SS_1/2`) |
 
 ### 사운드 장치 이름과 역할 (`GameFlow/Sound`)
 
 | 장치 이름 | 소리 파일 | 재생 시점 | 들리는 대상 | 음량 |
 |---|---|---|---|---|
-| `BGM_Main` | `bgm_bouncy` (반복) | 게임 시작, 중간 입장 | 각 플레이어 | 2.0 |
+| `BGM_Main` | `music_playgame` (60초, 59.95초마다 다시 재생) | 게임 시작, 중간 입장 | 각 플레이어 | 1.8 |
+| `BGM_Low` | `music_playgame` | 골인/챔피언 음악이 나오는 30초 동안 배경음악 대신 | 골인한 사람 | 0.55 |
 | `SFX_Start_GO` | `sfx_countdown_go` | 레이스 시작 | 전체 | 1.0 |
 | `SFX_Checkpoint` | `sfx_checkpoint` | 체크포인트를 처음 밟을 때 | 밟은 사람 | 1.0 |
 | `SFX_Bounce` | `sfx_bounce` | 플리퍼, 기둥, 주먹에 맞아 튕길 때 | 맞은 사람 | 1.0 |
@@ -41,12 +42,18 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 | `SFX_Fall` | `sfx_fall` | 죽는 순간(낙사 포함) | 그 사람(화면 기준 재생) | 0.8 |
 | `SFX_Wind` | `sfx_wind` | 에어벤트 바람 구역에 들어갈 때 | 그 사람 | 1.0 |
 | `SFX_Alarm` | `sfx_alarm` | 마지막 10초, 1초마다 | 아직 골인 못한 사람 | 0.65 |
-| `SFX_Finish` | `sfx_finish_finale` | 골인 | 골인한 사람 | 2.0 |
-| `SFX_TimeOver` | `sfx_timeover_8bit` | 제한 시간 종료 | 골인 못한 사람 | 2.0 |
+| `Music_Goal` | `music_goal_in` | 시간 안에 골인(1등 제외) | 골인한 사람 | 2.0 |
+| `Music_Champion` | `music_champion` | 1등으로 골인(골인 음악 대신) | 1등인 사람 | 1.8 |
+| `Music_TimeOver` | `music_timeover` | 제한 시간 종료 | 골인 못한 사람 | 2.0 |
 
 소리 파일은 `FallGuys_Sample/Audio` 폴더에 있고, 원본 wav는 `FallGuys_Test/sfx/`에 보관되어 있습니다.
 
-## 3. Verse 파일 4개
+## 3. Verse 파일 7개 (장치 5개 + 공통 타입 1개 + 음악 1개)
+
+- `common_types.verse`: 여러 장치가 같이 쓰는 타입(`player_snap`)
+- `music_manager.verse`: 배경음악 시작, 반복, 골인 음악 중 줄이기, 정지. `race_manager`가 호출한다.
+- 아래 `race_manager` 설명 중 음악 관련 부분은 `music_manager`가 맡는다.
+
 
 ### 3.1 `race_manager.verse` (514줄) — 레이스 전체 진행
 

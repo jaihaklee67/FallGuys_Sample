@@ -44,25 +44,21 @@ race_manager := class(creative_device):
     @editable
     Score:score_manager_device = score_manager_device{}
 
-    # 배경음악(Audio Player, 반복 재생). 게임이 시작되면 모든 플레이어에게 틀고, 중간에 들어온 플레이어에게도 틀며, 결과 화면 뒤 게임이 끝날 때 멈춘다.
+    # 배경음악 담당 장치. 게임 시작, 중간 입장, 골인 음악 중 줄이기, 종료 때 정지를 맡긴다.
     @editable
-    Music:audio_player_device = audio_player_device{}
-
-    # 배경음악 곡 길이(초). 장치의 반복 재생 두 번째 바퀴부터 소리가 작아져서, 곡이 끝날 때마다 Verse가 처음부터 다시 틀어준다.
-    @editable
-    MusicLoopSeconds:float = 30.9
+    MusicManager:music_manager = music_manager{}
 
     # 배경음악을 틀지 여부. 효과음만 따로 확인할 때 false로 둔다.
     @editable
     PlayMusic:logic = true
 
-    # 골인한 플레이어에게만 들리는 결승 효과음(Audio Player, Instigator Only).
+    # 시간 안에 골인한 플레이어에게만 들리는 골인 음악(Audio Player, Instigator Only).
     @editable
-    FinishSting:audio_player_device = audio_player_device{}
+    GoalMusic:audio_player_device = audio_player_device{}
 
-    # 제한시간 안에 골인하지 못한 플레이어에게만 들리는 타임오버 효과음.
+    # 제한시간 안에 골인하지 못한 플레이어에게만 들리는 타임오버 음악.
     @editable
-    TimeOverSfx:audio_player_device = audio_player_device{}
+    TimeOverMusic:audio_player_device = audio_player_device{}
 
     # 남은 시간이 10초 이하일 때 1초마다 울리는 알람. 아직 골인하지 않은 플레이어에게만 들린다.
     @editable
@@ -71,13 +67,9 @@ race_manager := class(creative_device):
     @editable
     AlarmSeconds:int = 10
 
-    # 결승 피날레 음악이 나오는 동안 틀어줄 작은 소리의 배경음악(BGM_Low). 피날레가 끝나면 원래 배경음악으로 되돌린다.
+    # 1등으로 골인한 플레이어에게만 들리는 챔피언 음악(Audio Player, Instigator Only). 1등은 골인 음악 대신 이 곡을 듣는다.
     @editable
-    MusicLow:audio_player_device = audio_player_device{}
-
-    # 결승 피날레 음악 길이(초). 이 시간 동안 배경음악을 줄인다.
-    @editable
-    FinishMusicSeconds:float = 9.0
+    ChampionMusic:audio_player_device = audio_player_device{}
 
     # 게임 시작(카운트다운이 끝나는 순간)에 모든 플레이어에게 울리는 GO 효과음.
     @editable
@@ -160,13 +152,11 @@ race_manager := class(creative_device):
     var RaceStart:float = -1.0
     var TimerWidgets:[player]timer_widgets = map{}
     var FinishedRank:[agent]int = map{}
-    var FinishedLeft:[agent]int = map{}
     var FinishedSpent:[agent]int = map{}
     var LastFinisher:?agent = false
     var GameEnded:logic = false
     var ResultCanvases:[player]canvas = map{}
     var ResultWaits:[player]result_wait = map{}
-    var Ducked:[player]logic = map{}
     var CheckpointCount:[player]int = map{}
     var CheckpointTime:[player]float = map{}
 
@@ -184,9 +174,7 @@ race_manager := class(creative_device):
         Checkpoint4.FirstActivationPerAgentEvent.Subscribe(OnCheckpoint)
         spawn{WatchFinishLine()}
         if (PlayMusic?):
-            for (Player : GetPlayspace().GetPlayers()):
-                Music.Play(Player)
-            spawn{RunMusic()}
+            MusicManager.Start()
         if (Manager := Self.GetSimulationEntity[].GetFortRoundManager[]):
             Manager.SubscribeRoundStarted(OnRoundStart)
             Print("race_manager: subscribed to round start")
@@ -202,7 +190,6 @@ race_manager := class(creative_device):
         set CheckpointCount = map{}
         set CheckpointTime = map{}
         set FinishedRank = map{}
-        set FinishedLeft = map{}
         set FinishedSpent = map{}
         set LastFinisher = false
         set GameEnded = false
@@ -231,7 +218,7 @@ race_manager := class(creative_device):
             Rank := FinishedRank.Length + 1
             # 결과 화면에 보여줄 걸린 시간: 출발부터 결승선까지 지난 시간(초, 내림).
             Spent := if (S := Floor[Elapsed]) then S else 0
-            if (set FinishedRank[Agent] = Rank, set FinishedLeft[Agent] = Left, set FinishedSpent[Agent] = Spent):
+            if (set FinishedRank[Agent] = Rank, set FinishedSpent[Agent] = Spent):
                 Print("race_manager: finished rank {Rank}, elapsed {Elapsed} sec, result shows {FormatClock(Spent)}, top clock frozen at {FormatClock(Left)}")
             set LastFinisher = option{Agent}
             Points := if (P := PointsByRank[Rank - 1]) then P else LastPlacePoints
@@ -245,30 +232,15 @@ race_manager := class(creative_device):
                 ShowResultFor(Player)
             CheckAllFinished()
 
-    # 골인한 플레이어에게만 축하 효과음을 잠깐 틀어준다.
+    # 골인한 플레이어에게만 골인 음악을 틀어준다. 1등은 챔피언 음악, 나머지는 골인 음악이고(겹치지 않게 하나만),
+    # 그동안 그 플레이어의 배경음악은 작은 소리로 바뀌었다가 끝나면 되돌아온다.
     PlaySting(Agent:agent)<suspends>:void =
-        FinishSting.Play(Agent)
-        # 피날레와 배경음악이 겹치지 않도록, 피날레가 나오는 동안 배경음악을 작은 소리 버전으로 바꾸고 끝나면 되돌린다.
-        if (Player := player[Agent], PlayMusic?):
-            if (set Ducked[Player] = true) {}
-            Music.Stop(Player)
-            MusicLow.Play(Player)
-            Sleep(FinishMusicSeconds)
-            MusicLow.Stop(Player)
-            if (set Ducked[Player] = false) {}
-            if (GameEnded = false):
-                Music.Play(Player)
-
-    # 곡이 끝나는 시점마다 모든 플레이어에게 처음부터 다시 틀어준다(레이스가 끝나면 멈춘다).
-    RunMusic()<suspends>:void =
-        loop:
-            Sleep(MusicLoopSeconds)
-            if (GameEnded = true):
-                break
-            for (Player : GetPlayspace().GetPlayers()):
-                IsDucked := if (D := Ducked[Player]) then D else false
-                if (IsDucked = false):
-                    Music.Play(Player)
+        if (Rank := FinishedRank[Agent], Rank = 1):
+            ChampionMusic.Play(Agent)
+        else:
+            GoalMusic.Play(Agent)
+        if (Player := player[Agent]):
+            MusicManager.DuckFor(Player)
 
     OnPlayerRemoved(Player:player):void =
         CheckAllFinished()
@@ -276,7 +248,7 @@ race_manager := class(creative_device):
     # 중간에 들어온 플레이어도 배경음악을 듣게 한다.
     OnPlayerAdded(Player:player):void =
         if (PlayMusic?, GameEnded = false):
-            Music.Play(Player)
+            MusicManager.PlayFor(Player)
 
     OnCheckpoint(Agent:agent):void =
         if (Player := player[Agent], RaceStart >= 0.0):
@@ -325,8 +297,7 @@ race_manager := class(creative_device):
             if (AnyPlayer := GetPlayspace().GetPlayers()[0]):
                 EndGame.Activate(AnyPlayer)
             Sleep(5.0)
-            Music.Stop()
-            MusicLow.Stop()
+            MusicManager.Stop()
             HideResults()
 
     # 화면 위 중앙 카운트다운. 라운드 시작부터 제한시간까지 돌리고, 0이 되면 레이스를 끝낸다.
@@ -471,9 +442,12 @@ race_manager := class(creative_device):
     # 게임이 끝나면 아직 결과 화면이 없는 플레이어(제한시간 안에 골인하지 못한 사람)에게 TIME OVER 화면을 보여준다.
     ShowResults():void =
         HideWaiting()
+        MusicManager.Halt()
         for (Player : GetPlayspace().GetPlayers()):
             if (not FinishedRank[Player]):
-                TimeOverSfx.Play(Player)
+                # 타임오버 음악이 배경음악과 겹치지 않도록 배경음악을 멈추고 튼다.
+                MusicManager.StopFor(Player)
+                TimeOverMusic.Play(Player)
             ShowResultFor(Player)
 
     # 해당 플레이어의 결과 화면을 한 번만 띄운다. 골인한 사람이면 아래에 남은 인원 안내도 같이 띄운다.

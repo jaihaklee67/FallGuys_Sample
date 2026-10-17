@@ -15,7 +15,7 @@
 		"bSuppressAutomaticVersePathAssignment": false,
 		"projectVersePath": "/jaihaklee@fortnite.com/FallGuys_Sample"
 	},
-	"compatibilityVersion": "42.30",
+	"compatibilityVersion": "42.40",
 	"requiredRedirectorStartingVersion": "42.10.57819926",
 	"editorPermissions": [],
 	"epicApp": "",
