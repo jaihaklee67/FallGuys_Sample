@@ -2,7 +2,7 @@ using { /Fortnite.com/Devices }
 using { /Fortnite.com/Characters }
 using { /Verse.org/Assets }
 using { /jaihaklee@fortnite.com/FallGuys_Sample/UI }
-using { /jaihaklee@fortnite.com/FallGuys_Sample/Italic }
+using { /jaihaklee@fortnite.com/FallGuys_Sample/Bubble }
 using { /Fortnite.com/Game }
 using { /Fortnite.com/UI }
 using { /Verse.org/Simulation }
@@ -17,18 +17,29 @@ glyph_def := struct:
     Image:texture
     Aspect:float
 
+# 0 이상 1 이하의 실수 (color_block의 진하기 타입).
+opacity_range := type{_X:float where 0.0 <= _X, _X <= 1.0}
+
 timer_widgets := class:
     Canvas:canvas
-    Text:text_block
-    Info:text_block
-    RankNum:text_block
-    RankSuffix:text_block
-    RankTotal:text_block
+    TensMin:texture_block
+    OneMin:texture_block
+    Colon:texture_block
+    SecTens:texture_block
+    SecOnes:texture_block
+    RankTens:texture_block
+    RankOnes:texture_block
+    SufA:texture_block
+    SufB:texture_block
+    RankSlash:texture_block
+    TotTens:texture_block
+    TotOnes:texture_block
 
 # 골인한 플레이어 화면 아래에 뜨는 "남은 사람 수" 안내.
 result_wait := class:
     Canvas:canvas
-    Text:text_block
+    Tens:texture_block
+    Ones:texture_block
 
 race_manager := class(creative_device):
 
@@ -111,24 +122,57 @@ race_manager := class(creative_device):
     @editable
     WarnSeconds:float = 60.0
 
+    # 상단 타이머 이미지(ui_time)의 가로 크기와 그 안의 시간 글자 이미지 높이.
     @editable
-    TimerTextSize:float = 96.0
+    TimerBoxWidth:float = 460.0
 
-    # 왼쪽 아래 순위 숫자 위의 "Ranking" 글자와 숫자 옆 ST/ND/RD/TH 글자 크기(같은 크기).
     @editable
-    RankLabelSize:float = 30.0
+    TimerDigitHeight:float = 66.0
+
+    # 왼쪽 아래 순위 이미지(ui_ranking)의 가로 크기, 그 안의 순위 숫자 크기, 숫자 옆 ST/ND/RD/TH 글자 크기.
+    @editable
+    RankBoxWidth:float = 300.0
+
+    @editable
+    RankNumSize:float = 60.0
+
+    @editable
+    RankSuffixSize:float = 30.0
+
+    # 전체 인원수 숫자(슬래시 뒤)의 크기. 순위 숫자보다 작게 보여준다. 슬래시는 이 크기의 1.2배.
+    @editable
+    RankTotalSize:float = 34.0
+
+    # 순위 숫자의 세로 위치: ui_ranking 이미지 맨 위에서 숫자 중심까지의 비율(0=맨 위, 1=맨 아래). 클수록 숫자가 아래로 내려간다.
+    @editable
+    RankTextYRatio:float = 0.65
+
+    # 체크포인트를 처음 밟을 때 뜨는 이미지(ui_checkpoint)의 가로 크기와 표시 시간(초).
+    @editable
+    CheckpointPopupWidth:float = 760.0
+
+    @editable
+    CheckpointPopupSeconds:float = 2.0
+
+    # 골인 화면(ui_goal_in)과 타임오버 화면(ui_timeover) 이미지의 가로 크기.
+    @editable
+    ResultImageWidth:float = 1000.0
 
     # 화면 UI 전체 크기 배율. 작은 화면(모바일 등)에서 글자가 너무 크거나 구석에서 잘리면 0.7 정도로 줄인다. 1.0이 기본.
     @editable
     HudScale:float = 1.0
 
-    # 골인한 뒤 결과 화면 아래에 뜨는 "남은 사람 수" 글자 크기.
+    # 골인한 뒤 결과 화면 아래에 뜨는 "WAITING FOR OTHERS  N LEFT" 글자 이미지 높이.
     @editable
     WaitingTextSize:float = 48.0
 
-    # 타이머 아래 순위, 체크포인트 글자 크기.
+    # 골인 화면(ui_goal_in) 이미지의 가로 크기. 타임오버 화면은 ResultImageWidth를 쓴다.
     @editable
-    InfoTextSize:float = 40.0
+    GoalImageWidth:float = 860.0
+
+    # 타임오버 화면에서 게임 화면 전체에 깔리는 붉은색의 진하기 (0=없음, 1=완전히 붉은색).
+    @editable
+    TimeOverTintOpacity:float = 0.22
 
     # 결승선 인식 상자 (cm). 최종 아치의 왼쪽 기둥에서 오른쪽 기둥 바깥까지 전체 폭(X -625~1999), 아치 앞뒤(Y), 바닥부터 아치 위까지(Z)이다.
     @editable
@@ -158,7 +202,7 @@ race_manager := class(creative_device):
     var ResultCanvases:[player]canvas = map{}
     var ResultWaits:[player]result_wait = map{}
     var CheckpointCount:[player]int = map{}
-    var CheckpointTime:[player]float = map{}
+    var CheckpointShowing:[player]logic = map{}
 
     Msg<localizes>(Text:string):message = "{Text}"
 
@@ -175,6 +219,7 @@ race_manager := class(creative_device):
         spawn{WatchFinishLine()}
         if (PlayMusic?):
             MusicManager.Start()
+        MusicManager.ResetFade()
         if (Manager := Self.GetSimulationEntity[].GetFortRoundManager[]):
             Manager.SubscribeRoundStarted(OnRoundStart)
             Print("race_manager: subscribed to round start")
@@ -182,13 +227,15 @@ race_manager := class(creative_device):
             Print("race_manager: no round manager, starting now")
             OnRoundStart()
 
+
     # 라운드가 시작하면 기록을 초기화하고 제한시간이 지나면 결과를 보여준다.
     OnRoundStart()<suspends>:void =
+        # 이전 라운드 끝에 줄였던 소리를 원래대로 되돌린다.
+        MusicManager.ResetFade()
         set RaceStart = GetSimulationElapsedTime()
         for (Player : GetPlayspace().GetPlayers()):
             StartSfx.Play(Player)
         set CheckpointCount = map{}
-        set CheckpointTime = map{}
         set FinishedRank = map{}
         set FinishedSpent = map{}
         set LastFinisher = false
@@ -253,9 +300,29 @@ race_manager := class(creative_device):
     OnCheckpoint(Agent:agent):void =
         if (Player := player[Agent], RaceStart >= 0.0):
             Count := if (C := CheckpointCount[Player]) then C + 1 else 1
-            if (set CheckpointCount[Player] = Count, set CheckpointTime[Player] = GetSimulationElapsedTime()):
+            if (set CheckpointCount[Player] = Count):
                 Print("race_manager: checkpoint {Count}/{CheckpointTotal}")
             UpdateInfo()
+            if (GameEnded = false):
+                spawn{ShowCheckpointPopup(Player)}
+
+    # 체크포인트를 처음 밟았을 때 화면 위쪽에 안내 이미지를 잠깐 보여준다.
+    ShowCheckpointPopup(Player:player)<suspends>:void =
+        Showing:logic = if (S := CheckpointShowing[Player], S = true) then true else false
+        if (Showing = false, PlayerUi := GetPlayerUI[Player]):
+            Width := CheckpointPopupWidth * HudScale
+            Popup := canvas{Slots := array{canvas_slot{
+                Anchors := anchors{Minimum := vector2{X := 0.5, Y := 0.5}, Maximum := vector2{X := 0.5, Y := 0.5}},
+                Offsets := margin{},
+                Alignment := vector2{X := 0.5, Y := 0.5},
+                SizeToContent := true,
+                Widget := texture_block{DefaultImage := ui_checkpoint, DefaultDesiredSize := vector2{X := Width, Y := Width / 1.9324}}}}}
+            PlayerUi.AddWidget(Popup)
+            if (set CheckpointShowing[Player] = true) {}
+            Sleep(CheckpointPopupSeconds)
+            if (PlayerUi2 := GetPlayerUI[Player]):
+                PlayerUi2.RemoveWidget(Popup)
+            if (set CheckpointShowing[Player] = false) {}
 
     # 아직 골인하지 못한 플레이어에게만 알람을 울린다.
     PlayAlarm():void =
@@ -293,7 +360,9 @@ race_manager := class(creative_device):
             set GameEnded = true
             Print("race_manager: race over, showing results")
             ShowResults()
-            Sleep(ResultSeconds)
+            # 결과 화면 시간(ResultSeconds) 안에서, 게임을 끝내기 직전 FadeSeconds 동안 소리를 단계로 줄인다. 총 시간은 바뀔지 않는다.
+            Sleep(Max(0.0, ResultSeconds - MusicManager.FadeSeconds))
+            MusicManager.FadeOut()
             if (AnyPlayer := GetPlayspace().GetPlayers()[0]):
                 EndGame.Activate(AnyPlayer)
             Sleep(5.0)
@@ -320,111 +389,151 @@ race_manager := class(creative_device):
             Sleep(0.2)
         EndRace()
 
+    # 플레이어마다 상단 타이머(ui_time 이미지 + 시간 글자), 체크포인트 진행 줄, 왼쪽 아래 순위 박스(ui_ranking 이미지 + 순위 글자)를 만든다.
+    # 글자는 이미지 위에 얹는다. 이미지 안의 글자 칸 중심 위치는 이미지 크기에 대한 비율로 잡는다.
     AddMissingTimers(Left:int):void =
         for (Player : GetPlayspace().GetPlayers()):
             if (not TimerWidgets[Player], PlayerUi := GetPlayerUI[Player]):
-                Text := text_block{
-                    DefaultText := Msg(FormatClock(Left)),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := TimerTextSize * HudScale,
-                    DefaultJustification := text_justification.Center,
-                    DefaultShadowOffset := option{vector2{X := 3.0, Y := 3.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
+                TopCenter := anchors{Minimum := vector2{X := 0.5, Y := 0.0}, Maximum := vector2{X := 0.5, Y := 0.0}}
+                BottomLeft := anchors{Minimum := vector2{X := 0.0, Y := 1.0}, Maximum := vector2{X := 0.0, Y := 1.0}}
+                # 상단 타이머: ui_time(가로:세로 = 2:1)의 어두운 칸 중심은 가로 66%, 세로 57.5% 지점.
+                TimerW := TimerBoxWidth * HudScale
+                TimerH := TimerW / 2.0
+                TimerTop := 16.0 * HudScale
+                TimerBg := texture_block{DefaultImage := ui_time, DefaultDesiredSize := vector2{X := TimerW, Y := TimerH}}
+                BgSlot := canvas_slot{
+                    Anchors := TopCenter,
+                    Offsets := margin{Top := TimerTop},
+                    SizeToContent := true,
+                    Alignment := vector2{X := 0.5, Y := 0.0},
+                    ZOrder := 0,
+                    Widget := TimerBg}
+                # 시간은 귀여운 글자 이미지 5칸 한 줄로 만들고, 이미지 안의 어두운 칸 중심에 둔다.
+                DigitH := TimerDigitHeight * HudScale
+                TensMin := MakeGlyph('0', DigitH, NamedColors.White)
+                OneMin := MakeGlyph('0', DigitH, NamedColors.White)
+                Colon := MakeGlyph(':', DigitH, NamedColors.White)
+                SecTens := MakeGlyph('0', DigitH, NamedColors.White)
+                SecOnes := MakeGlyph('0', DigitH, NamedColors.White)
+                ClockRow := stack_box{
+                    Orientation := orientation.Horizontal,
+                    Slots := array{
+                        stack_box_slot{Widget := TensMin},
+                        stack_box_slot{Widget := OneMin, Padding := margin{Left := 0.0 - DigitH * 0.06}},
+                        stack_box_slot{Widget := Colon, Padding := margin{Left := 0.0 - DigitH * 0.06}},
+                        stack_box_slot{Widget := SecTens, Padding := margin{Left := 0.0 - DigitH * 0.06}},
+                        stack_box_slot{Widget := SecOnes, Padding := margin{Left := 0.0 - DigitH * 0.06}}}}
                 Slot := canvas_slot{
-                    Anchors := anchors{Minimum := vector2{X := 0.5, Y := 0.0}, Maximum := vector2{X := 0.5, Y := 0.0}},
-                    Offsets := margin{Top := 24.0 * HudScale},
+                    Anchors := TopCenter,
+                    Offsets := margin{Left := 0.16 * TimerW, Top := TimerTop + 0.575 * TimerH},
                     SizeToContent := true,
-                    Alignment := vector2{X := 0.5, Y := 0.0},
-                    Widget := Text}
-                Info := text_block{
-                    DefaultText := Msg(""),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := InfoTextSize * HudScale,
-                    DefaultJustification := text_justification.Center,
-                    DefaultShadowOffset := option{vector2{X := 2.0, Y := 2.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
-                InfoSlot := canvas_slot{
-                    Anchors := anchors{Minimum := vector2{X := 0.5, Y := 0.0}, Maximum := vector2{X := 0.5, Y := 0.0}},
-                    Offsets := margin{Top := (24.0 + TimerTextSize * 1.25) * HudScale},
+                    Alignment := vector2{X := 0.5, Y := 0.5},
+                    ZOrder := 1,
+                    Widget := ClockRow}
+                # 왼쪽 아래 순위 박스: ui_ranking(가로:세로 = 1.2625:1)의 분홍 칸 중심은 가로 53%, 세로는 RankTextYRatio(기본 65%) 지점.
+                RankW := RankBoxWidth * HudScale
+                RankH := RankW / 1.2625
+                RankMargin := 24.0 * HudScale
+                RankBg := texture_block{DefaultImage := ui_ranking, DefaultDesiredSize := vector2{X := RankW, Y := RankH}}
+                RankBgSlot := canvas_slot{
+                    Anchors := BottomLeft,
+                    Offsets := margin{Left := RankMargin, Top := 0.0 - RankMargin},
                     SizeToContent := true,
-                    Alignment := vector2{X := 0.5, Y := 0.0},
-                    Widget := Info}
-                RankNum := text_block{
-                    DefaultText := Msg(""),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := TimerTextSize * HudScale,
-                    DefaultShadowOffset := option{vector2{X := 3.0, Y := 3.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
-                RankSuffix := text_block{
-                    DefaultText := Msg(""),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := RankLabelSize * HudScale,
-                    DefaultShadowOffset := option{vector2{X := 2.0, Y := 2.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
-                RankTotal := text_block{
-                    DefaultText := Msg(""),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := TimerTextSize * HudScale,
-                    DefaultShadowOffset := option{vector2{X := 3.0, Y := 3.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
+                    Alignment := vector2{X := 0.0, Y := 1.0},
+                    ZOrder := 0,
+                    Widget := RankBg}
+                # 순위 글자(예: 3RD / 8)도 글자 이미지로 만든다. 한 자리씩 따로 바꿀 수 있게 칸을 나눠 둔다.
+                NumH := RankNumSize * HudScale
+                SufH0 := RankSuffixSize * HudScale
+                TotH := RankTotalSize * HudScale
+                SlashH := TotH * 1.2
+                Overlap := 0.0 - NumH * 0.04
+                RankTens := MakeGlyph('0', NumH, NamedColors.White)
+                RankOnes := MakeGlyph('1', NumH, NamedColors.White)
+                SufA := MakeGlyph('S', SufH0, NamedColors.White)
+                SufB := MakeGlyph('T', SufH0, NamedColors.White)
+                RankSlash := MakeGlyph('/', SlashH, NamedColors.White)
+                TotTens := MakeGlyph('0', TotH, NamedColors.White)
+                TotOnes := MakeGlyph('8', TotH, NamedColors.White)
                 RankRow := stack_box{
                     Orientation := orientation.Horizontal,
                     Slots := array{
-                        stack_box_slot{Widget := RankNum, VerticalAlignment := vertical_alignment.Bottom},
-                        stack_box_slot{Widget := RankSuffix, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := 4.0 * HudScale, Bottom := 6.0 * HudScale}},
-                        stack_box_slot{Widget := RankTotal, VerticalAlignment := vertical_alignment.Bottom}}}
-                RankLabel := text_block{
-                    DefaultText := Msg("Ranking"),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := RankLabelSize * HudScale,
-                    DefaultShadowOffset := option{vector2{X := 2.0, Y := 2.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
-                RankBox := stack_box{
-                    Orientation := orientation.Vertical,
-                    Slots := array{
-                        stack_box_slot{Widget := RankLabel, HorizontalAlignment := horizontal_alignment.Left, Padding := margin{Left := 6.0 * HudScale}},
-                        stack_box_slot{Widget := RankRow, HorizontalAlignment := horizontal_alignment.Left}}}
+                        stack_box_slot{Widget := RankTens, VerticalAlignment := vertical_alignment.Bottom},
+                        stack_box_slot{Widget := RankOnes, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := Overlap}},
+                        stack_box_slot{Widget := SufA, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := 2.0 * HudScale}},
+                        stack_box_slot{Widget := SufB, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := 0.0 - SufH0 * 0.04}},
+                        stack_box_slot{Widget := RankSlash, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := 6.0 * HudScale}},
+                        stack_box_slot{Widget := TotTens, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := 6.0 * HudScale}},
+                        stack_box_slot{Widget := TotOnes, VerticalAlignment := vertical_alignment.Bottom, Padding := margin{Left := 0.0 - TotH * 0.04}}}}
                 RankSlot := canvas_slot{
-                    Anchors := anchors{Minimum := vector2{X := 0.0, Y := 1.0}, Maximum := vector2{X := 0.0, Y := 1.0}},
-                    Offsets := margin{Left := 40.0 * HudScale, Top := -40.0 * HudScale},
+                    Anchors := BottomLeft,
+                    Offsets := margin{Left := RankMargin + 0.53 * RankW, Top := 0.0 - RankMargin - (1.0 - RankTextYRatio) * RankH},
                     SizeToContent := true,
-                    Alignment := vector2{X := 0.0, Y := 1.0},
-                    Widget := RankBox}
-                Canvas := canvas{Slots := array{Slot, InfoSlot, RankSlot}}
-                PlayerUi.AddWidget(Canvas)
-                if (set TimerWidgets[Player] = timer_widgets{Canvas := Canvas, Text := Text, Info := Info, RankNum := RankNum, RankSuffix := RankSuffix, RankTotal := RankTotal}) {}
+                    Alignment := vector2{X := 0.5, Y := 0.5},
+                    ZOrder := 1,
+                    Widget := RankRow}
+                Canvas := canvas{Slots := array{BgSlot, Slot, RankBgSlot, RankSlot}}
+                # HUD는 결과 화면(타임오버 붉은빛 포함)보다 위에 뜨도록 높은 ZOrder를 준다.
+                PlayerUi.AddWidget(Canvas, player_ui_slot{ZOrder := 10})
+                Widgets := timer_widgets{Canvas := Canvas, TensMin := TensMin, OneMin := OneMin, Colon := Colon, SecTens := SecTens, SecOnes := SecOnes, RankTens := RankTens, RankOnes := RankOnes, SufA := SufA, SufB := SufB, RankSlash := RankSlash, TotTens := TotTens, TotOnes := TotOnes}
+                SetClock(Widgets, Left)
+                if (set TimerWidgets[Player] = Widgets) {}
 
     # 모든 플레이어에게 현재 남은 시간을 계속 보여준다(골인한 사람의 기록은 결과 화면에 따로 표시).
     UpdateTimers(Left:int):void =
         for (Player -> W : TimerWidgets):
-            Shown := Left
-            Color := if (Shown <= Floor[WarnSeconds]) then NamedColors.Red else NamedColors.White
-            W.Text.SetText(Msg(FormatClock(Shown)))
-            W.Text.SetTextColor(Color)
+            SetClock(W, Left)
 
-    # 타이머 아래 한 줄은 체크포인트 진행(막 밟았으면 2초간 금색), 왼쪽 아래 구석은 현재 순위 "1/4" (타이머와 같은 크기).
+    # 타이머 글자 이미지 5칸(분 십의 자리, 분, 콜론, 초 십의 자리, 초)의 숫자와 색을 바꾼다. 분이 10 미만이면 맨 앞 칸은 숨긴다.
+    SetClock(W:timer_widgets, Left:int):void =
+        Color := if (Left <= Floor[WarnSeconds]) then NamedColors.Red else NamedColors.White
+        if (M := Quotient[Left, 60], S := Mod[Left, 60], M1 := Quotient[M, 10], M0 := Mod[M, 10], S1 := Quotient[S, 10], S0 := Mod[S, 10]):
+            W.TensMin.SetImage(DigitImage(M1))
+            W.OneMin.SetImage(DigitImage(M0))
+            W.SecTens.SetImage(DigitImage(S1))
+            W.SecOnes.SetImage(DigitImage(S0))
+            if (M1 > 0):
+                W.TensMin.SetVisibility(widget_visibility.Visible)
+            else:
+                W.TensMin.SetVisibility(widget_visibility.Collapsed)
+        for (Block : array{W.TensMin, W.OneMin, W.Colon, W.SecTens, W.SecOnes}):
+            Block.SetTint(Color)
+
+    # 순위 박스의 글자 이미지 칸을 갱신한다: "3RD / 8". 십의 자리가 0이면 그 칸은 숨긴다. 접미어 글자는 숫자보다 작게 보여준다.
+    SetRank(W:timer_widgets, Place:int, Total:int):void =
+        SufH := RankSuffixSize * HudScale
+        if (P1 := Quotient[Place, 10], P0 := Mod[Place, 10], T1 := Quotient[Total, 10], T0 := Mod[Total, 10]):
+            W.RankOnes.SetImage(DigitImage(P0))
+            W.RankTens.SetImage(DigitImage(P1))
+            W.TotOnes.SetImage(DigitImage(T0))
+            W.TotTens.SetImage(DigitImage(T1))
+            if (P1 > 0):
+                W.RankTens.SetVisibility(widget_visibility.Visible)
+            else:
+                W.RankTens.SetVisibility(widget_visibility.Collapsed)
+            if (T1 > 0):
+                W.TotTens.SetVisibility(widget_visibility.Visible)
+            else:
+                W.TotTens.SetVisibility(widget_visibility.Collapsed)
+        Suffix := OrdinalSuffix(Place)
+        if (A := Suffix[0], B := Suffix[1]):
+            SetGlyph(W.SufA, A, SufH)
+            SetGlyph(W.SufB, B, SufH)
+
+    # 왼쪽 아래 순위 박스는 현재 순위 "1ST / 4", 골인 후 대기 문구는 남은 인원 숫자를 갱신한다.
     UpdateInfo():void =
-        Now := GetSimulationElapsedTime()
         Total := GetPlayspace().GetPlayers().Length
         Waiting := Total - FinishedRank.Length
         for (Player -> W : TimerWidgets):
-            Count := if (C := CheckpointCount[Player]) then C else 0
-            Fresh := if (T := CheckpointTime[Player], Now - T < 2.0) then true else false
-            Line := if (FinishedRank[Player]) then "FINISHED - {Waiting} LEFT" else "CHECKPOINT {Count} / {CheckpointTotal}"
-            W.Info.SetText(Msg(Line))
-            Place := RankOf(Player)
-            W.RankNum.SetText(Msg("{Place}"))
-            W.RankSuffix.SetText(Msg(OrdinalSuffix(Place)))
-            W.RankTotal.SetText(Msg(" / {Total}"))
-            W.Info.SetTextColor(if (Fresh = true) then NamedColors.Gold else NamedColors.White)
+            SetRank(W, RankOf(Player), Total)
         for (Player -> Wait : ResultWaits):
-            Wait.Text.SetText(Msg("WAITING FOR OTHERS - {Waiting} LEFT"))
+            if (T1 := Quotient[Waiting, 10], T0 := Mod[Waiting, 10]):
+                Wait.Ones.SetImage(DigitImage(T0))
+                Wait.Tens.SetImage(DigitImage(T1))
+                if (T1 > 0):
+                    Wait.Tens.SetVisibility(widget_visibility.Visible)
+                else:
+                    Wait.Tens.SetVisibility(widget_visibility.Collapsed)
 
     HideTimers():void =
         for (Player -> W : TimerWidgets):
@@ -457,24 +566,30 @@ race_manager := class(creative_device):
             PlayerUi.AddWidget(Canvas)
             if (set ResultCanvases[Player] = Canvas) {}
             if (FinishedRank[Player], GameEnded = false):
-                Text := text_block{
-                    DefaultText := Msg(""),
-                    DefaultTextColor := NamedColors.White,
-                    DefaultTextSize := WaitingTextSize * HudScale,
-                    DefaultJustification := text_justification.Center,
-                    DefaultShadowOffset := option{vector2{X := 3.0, Y := 3.0}},
-                    DefaultShadowColor := NamedColors.Black,
-                    DefaultShadowOpacity := 1.0}
+                # 대기 문구도 글자 이미지로: "WAITING FOR OTHERS"(흰색) + 남은 인원 숫자(금색) + "LEFT"(금색). 숫자만 따로 바뀐다.
+                H := WaitingTextSize * HudScale
+                Gold := MakeColorFromHex("FFD84A")
+                Label := BuildGlyphRow("WAITING FOR OTHERS", H, NamedColors.White)
+                CountTens := MakeGlyph('0', H, Gold)
+                CountOnes := MakeGlyph('0', H, Gold)
+                LeftRow := BuildGlyphRow("LEFT", H, Gold)
+                WaitRow := stack_box{
+                    Orientation := orientation.Horizontal,
+                    Slots := array{
+                        stack_box_slot{Widget := Label},
+                        stack_box_slot{Widget := CountTens, Padding := margin{Left := H * 0.45}},
+                        stack_box_slot{Widget := CountOnes, Padding := margin{Left := 0.0 - H * 0.04}},
+                        stack_box_slot{Widget := LeftRow, Padding := margin{Left := H * 0.28}}}}
                 Slot := canvas_slot{
                     Anchors := anchors{Minimum := vector2{X := 0.5, Y := 1.0}, Maximum := vector2{X := 0.5, Y := 1.0}},
-                    Offsets := margin{Top := -70.0 * HudScale},
+                    Offsets := margin{Top := -58.0 * HudScale},
                     SizeToContent := true,
                     Alignment := vector2{X := 0.5, Y := 1.0},
                     ZOrder := 3,
-                    Widget := Text}
+                    Widget := WaitRow}
                 WaitCanvas := canvas{Slots := array{Slot}}
                 PlayerUi.AddWidget(WaitCanvas)
-                if (set ResultWaits[Player] = result_wait{Canvas := WaitCanvas, Text := Text}) {}
+                if (set ResultWaits[Player] = result_wait{Canvas := WaitCanvas, Tens := CountTens, Ones := CountOnes}) {}
                 UpdateInfo()
 
     HideWaiting():void =
@@ -513,32 +628,56 @@ race_manager := class(creative_device):
             return "{Rank}RD"
         "{Rank}TH"
 
-    # 결과 화면: 골인한 사람은 순위와 기록, 완주하지 못한 사람은 TIME OVER!만 보여준다.
+    # 결과 화면: 골인한 사람은 골인 이미지와 순위·기록, 완주하지 못한 사람은 타임오버 이미지만 보여준다.
     BuildResultCanvas(Player:player):canvas =
         if (Rank := FinishedRank[Player], Spent := FinishedSpent[Player]):
-            BigColor := if (Rank = 1) then MakeColorFromHex("FFD84A") else NamedColors.White
-            return BuildNeonCanvas("{Ordinal(Rank)} PLACE", "TIME  {FormatClock(Spent)}", BigColor, result_success)
-        BuildNeonCanvas("TIME OVER!", "", NamedColors.White, result_fail)
+            return BuildGoalCanvas(Rank, Spent)
+        BuildTimeOverCanvas()
 
-    # 이태릭 글자 이미지 표: 문자 -> (텍스처, 가로/세로 비율). 글자 잉크 경계에 맞게 잘라낸 이미지라서 오른쪽이 잘리지 않는다.
-    GlyphTable():[char]glyph_def =
+    # 우리가 쓰는 글꼴 이미지 표(둥근 통통한 흰색 글자 + 엇은 어두운 테두리): 문자 -> (텍스처, 가로/세로 비율).
+    # 숫자 0~9는 모두 같은 가로 비율이라 시간이 바뀔어도 자리가 흔들리지 않는다. 모든 글자의 세로 기준선이 같다. (수정: Content/글꼴 이미지 Bubble 폴더)
+    GlyphTable()<transacts>:[char]glyph_def =
         map{
-            '0' => glyph_def{Image := g_0, Aspect := 0.3812}, '1' => glyph_def{Image := g_1, Aspect := 0.3062},
-            '2' => glyph_def{Image := g_2, Aspect := 0.3812}, '3' => glyph_def{Image := g_3, Aspect := 0.3812},
-            '4' => glyph_def{Image := g_4, Aspect := 0.3938}, '5' => glyph_def{Image := g_5, Aspect := 0.3875},
-            '6' => glyph_def{Image := g_6, Aspect := 0.375}, '7' => glyph_def{Image := g_7, Aspect := 0.375},
-            '8' => glyph_def{Image := g_8, Aspect := 0.3812}, '9' => glyph_def{Image := g_9, Aspect := 0.375},
-            ':' => glyph_def{Image := g_colon, Aspect := 0.2188}, '.' => glyph_def{Image := g_dot, Aspect := 0.1688}, '!' => glyph_def{Image := g_excl, Aspect := 0.2438},
-            'S' => glyph_def{Image := g_S, Aspect := 0.45}, 'T' => glyph_def{Image := g_T, Aspect := 0.4312},
-            'N' => glyph_def{Image := g_N, Aspect := 0.5188}, 'D' => glyph_def{Image := g_D, Aspect := 0.4938},
-            'R' => glyph_def{Image := g_R, Aspect := 0.5}, 'H' => glyph_def{Image := g_H, Aspect := 0.5188},
-            'P' => glyph_def{Image := g_P, Aspect := 0.4812}, 'L' => glyph_def{Image := g_L, Aspect := 0.4},
-            'A' => glyph_def{Image := g_A, Aspect := 0.4938}, 'C' => glyph_def{Image := g_C, Aspect := 0.475},
-            'E' => glyph_def{Image := g_E, Aspect := 0.4938}, 'I' => glyph_def{Image := g_I, Aspect := 0.2562},
-            'M' => glyph_def{Image := g_M, Aspect := 0.575}, 'O' => glyph_def{Image := g_O, Aspect := 0.5062},
-            'V' => glyph_def{Image := g_V, Aspect := 0.4938}}
+            '0' => glyph_def{Image := b_0, Aspect := 0.7656}, '1' => glyph_def{Image := b_1, Aspect := 0.7656},
+            '2' => glyph_def{Image := b_2, Aspect := 0.7656}, '3' => glyph_def{Image := b_3, Aspect := 0.7656},
+            '4' => glyph_def{Image := b_4, Aspect := 0.7656}, '5' => glyph_def{Image := b_5, Aspect := 0.7656},
+            '6' => glyph_def{Image := b_6, Aspect := 0.7656}, '7' => glyph_def{Image := b_7, Aspect := 0.7656},
+            '8' => glyph_def{Image := b_8, Aspect := 0.7656}, '9' => glyph_def{Image := b_9, Aspect := 0.7656},
+            ':' => glyph_def{Image := b_colon, Aspect := 0.3490}, '/' => glyph_def{Image := b_slash, Aspect := 0.5052},
+            'A' => glyph_def{Image := b_A, Aspect := 0.7917}, 'B' => glyph_def{Image := b_B, Aspect := 0.7240},
+            'C' => glyph_def{Image := b_C, Aspect := 0.7240}, 'D' => glyph_def{Image := b_D, Aspect := 0.7240},
+            'E' => glyph_def{Image := b_E, Aspect := 0.6979}, 'F' => glyph_def{Image := b_F, Aspect := 0.6719},
+            'G' => glyph_def{Image := b_G, Aspect := 0.7813}, 'H' => glyph_def{Image := b_H, Aspect := 0.7240},
+            'I' => glyph_def{Image := b_I, Aspect := 0.3073}, 'J' => glyph_def{Image := b_J, Aspect := 0.6458},
+            'K' => glyph_def{Image := b_K, Aspect := 0.7135}, 'L' => glyph_def{Image := b_L, Aspect := 0.6667},
+            'M' => glyph_def{Image := b_M, Aspect := 0.8906}, 'N' => glyph_def{Image := b_N, Aspect := 0.7396},
+            'O' => glyph_def{Image := b_O, Aspect := 0.7813}, 'P' => glyph_def{Image := b_P, Aspect := 0.7083},
+            'Q' => glyph_def{Image := b_Q, Aspect := 0.7813}, 'R' => glyph_def{Image := b_R, Aspect := 0.7188},
+            'S' => glyph_def{Image := b_S, Aspect := 0.7240}, 'T' => glyph_def{Image := b_T, Aspect := 0.7760},
+            'U' => glyph_def{Image := b_U, Aspect := 0.7188}, 'V' => glyph_def{Image := b_V, Aspect := 0.7813},
+            'W' => glyph_def{Image := b_W, Aspect := 1.0156}, 'X' => glyph_def{Image := b_X, Aspect := 0.7604},
+            'Y' => glyph_def{Image := b_Y, Aspect := 0.7760}, 'Z' => glyph_def{Image := b_Z, Aspect := 0.6927}}
 
-    # 문자열을 이태릭 글자 이미지 한 줄로 조립한다. 글자 사이는 높이의 0.05배, 공백은 0.28배만큼 띄운다. Height는 이미지 높이(대문자 높이는 약 45%).
+    # 글자 하나를 이미지로 만든다. Height는 글자 이미지 높이(여백 포함, 대문자 높이는 약 84%).
+    MakeGlyph(C:char, Height:float, Tint:color):texture_block =
+        if (G := GlyphTable()[C]):
+            return texture_block{DefaultImage := G.Image, DefaultTint := Tint, DefaultDesiredSize := vector2{X := G.Aspect * Height, Y := Height}}
+        texture_block{DefaultImage := b_0, DefaultTint := Tint, DefaultDesiredSize := vector2{X := 0.7656 * Height, Y := Height}}
+
+    # 0~9를 글자 이미지로 바꾼다.
+    DigitImage(N:int):texture =
+        Digits := array{b_0, b_1, b_2, b_3, b_4, b_5, b_6, b_7, b_8, b_9}
+        if (D := Digits[N]):
+            return D
+        b_0
+
+    # 글자 하나의 텍스처와 높이에 맞춘 가로 크기를 블록에 적용한다(순위 접미어 ST/ND/RD/TH 처럼 글자가 바뀔 때).
+    SetGlyph(Block:texture_block, C:char, Height:float):void =
+        if (G := GlyphTable()[C]):
+            Block.SetImage(G.Image)
+            Block.SetDesiredSize(vector2{X := G.Aspect * Height, Y := Height})
+
+    # 문자열을 글자 이미지 한 줄로 조립한다. 글자 사이는 높이의 0.03배만큼 띄우고, 공백은 높이의 0.28배만큼 띄운다.
     BuildGlyphRow(Text:string, Height:float, Tint:color):stack_box =
         Table := GlyphTable()
         var Slots:[]stack_box_slot = array{}
@@ -546,26 +685,41 @@ race_manager := class(creative_device):
         for (C : Text):
             if (G := Table[C]):
                 Tex := texture_block{DefaultImage := G.Image, DefaultTint := Tint, DefaultDesiredSize := vector2{X := G.Aspect * Height, Y := Height}}
-                set Slots += array{stack_box_slot{Widget := Tex, Padding := margin{Left := Gap}}}
-                set Gap = Height * 0.12
+                # 콜론(:)은 글자 폭이 좋아서 숫자와 겹쳐 보이기 쉽다. 앞뒤로 조금 더 벌린다.
+                Extra := if (C = ':') then Height * 0.06 else 0.0
+                set Slots += array{stack_box_slot{Widget := Tex, Padding := margin{Left := Gap + Extra}}}
+                set Gap = Height * 0.03 + Extra
             else:
-                set Gap += Height * 0.22
+                set Gap += Height * 0.28
         stack_box{Orientation := orientation.Horizontal, Slots := Slots}
 
-    # 배경 이미지(전체 화면) + 가운데 이태릭 글자. Sub가 비어 있으면 큰 글자만 가운데에 둔다.
-    BuildNeonCanvas(Big:string, Sub:string, BigColor:color, BackdropImage:texture):canvas =
-        Point := anchors{Minimum := vector2{X := 0.5, Y := 0.5}, Maximum := vector2{X := 0.5, Y := 0.5}}
+
+    # 타임오버 화면: 게임 화면 전체에 옛은 붉은색을 깔고, 가운데에 ui_timeover 이미지를 놓는다.
+    # 위쪽 타이머와 왼쪽 아래 순위 박스(HUD)는 이 화면보다 위에 뜨므로 붉은빛이 입히지 않는다.
+    BuildTimeOverCanvas():canvas =
+        Center := anchors{Minimum := vector2{X := 0.5, Y := 0.5}, Maximum := vector2{X := 0.5, Y := 0.5}}
         FullScreen := anchors{Minimum := vector2{X := 0.0, Y := 0.0}, Maximum := vector2{X := 1.0, Y := 1.0}}
-        Pivot := vector2{X := 0.5, Y := 0.5}
-        HasSub:logic = if (Sub <> "") then true else false
-        BigHeight := (if (HasSub?) then 190.0 else 230.0) * HudScale
-        BigY := (if (HasSub?) then -20.0 else 0.0) * HudScale
-        Backdrop := texture_block{DefaultImage := BackdropImage}
-        BigRow := BuildGlyphRow(Big, BigHeight, BigColor)
-        var Slots:[]canvas_slot = array{
-            canvas_slot{Anchors := FullScreen, Offsets := margin{Left := 0.0, Top := 0.0, Right := 0.0, Bottom := 0.0}, Alignment := vector2{X := 0.0, Y := 0.0}, SizeToContent := false, ZOrder := 0, Widget := Backdrop},
-            canvas_slot{Anchors := Point, Offsets := margin{Left := 0.0, Top := BigY}, Alignment := Pivot, SizeToContent := true, ZOrder := 2, Widget := BigRow}}
-        if (HasSub?):
-            SubRow := BuildGlyphRow(Sub, 85.0 * HudScale, NamedColors.White)
-            set Slots += array{canvas_slot{Anchors := Point, Offsets := margin{Left := 0.0, Top := 56.0 * HudScale}, Alignment := Pivot, SizeToContent := true, ZOrder := 2, Widget := SubRow}}
+        Width := ResultImageWidth * HudScale
+        Image := texture_block{DefaultImage := ui_timeover, DefaultDesiredSize := vector2{X := Width, Y := Width / 1.7778}}
+        ImageSlot := canvas_slot{Anchors := Center, Offsets := margin{Top := -20.0 * HudScale}, Alignment := vector2{X := 0.5, Y := 0.5}, SizeToContent := true, ZOrder := 1, Widget := Image}
+        var Slots:[]canvas_slot = array{ImageSlot}
+        # 진하기는 0~1 범위의 값만 쓸 수 있어 범위를 확인한다. 범위 밖이면 붉은빛 없이 이미지만 보여준다.
+        if (Opacity := opacity_range[TimeOverTintOpacity]):
+            Tint := color_block{DefaultColor := MakeColorFromHex("FF2A3A"), DefaultOpacity := Opacity}
+            set Slots = array{canvas_slot{Anchors := FullScreen, Offsets := margin{}, Alignment := vector2{X := 0.0, Y := 0.0}, SizeToContent := false, ZOrder := 0, Widget := Tint}, ImageSlot}
         canvas{Slots := Slots}
+
+    # 골인 화면: ui_goal_in 이미지 아래에 순위(예: 1ST PLACE)와 기록(예: TIME 4:52)을 글자 이미지로 보여준다.
+    # 이미지는 화면 가운데보다 조금 아래에 두어 위쪽 타이머를 가리지 않는다. 그 아래 대기 문구는 ShowResultFor가 따로 띄운다.
+    BuildGoalCanvas(Rank:int, Spent:int):canvas =
+        Point := anchors{Minimum := vector2{X := 0.5, Y := 0.5}, Maximum := vector2{X := 0.5, Y := 0.5}}
+        Pivot := vector2{X := 0.5, Y := 0.5}
+        Width := GoalImageWidth * HudScale
+        Image := texture_block{DefaultImage := ui_goal_in, DefaultDesiredSize := vector2{X := Width, Y := Width / 1.8112}}
+        BigColor := if (Rank = 1) then MakeColorFromHex("FFD84A") else NamedColors.White
+        BigRow := BuildGlyphRow("{Ordinal(Rank)} PLACE", 84.0 * HudScale, BigColor)
+        SubRow := BuildGlyphRow("TIME  {FormatClock(Spent)}", 50.0 * HudScale, NamedColors.White)
+        canvas{Slots := array{
+            canvas_slot{Anchors := Point, Offsets := margin{Top := 5.0 * HudScale}, Alignment := Pivot, SizeToContent := true, ZOrder := 0, Widget := Image},
+            canvas_slot{Anchors := Point, Offsets := margin{Top := 300.0 * HudScale}, Alignment := Pivot, SizeToContent := true, ZOrder := 2, Widget := BigRow},
+            canvas_slot{Anchors := Point, Offsets := margin{Top := 380.0 * HudScale}, Alignment := Pivot, SizeToContent := true, ZOrder := 2, Widget := SubRow}}}

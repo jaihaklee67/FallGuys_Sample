@@ -23,18 +23,19 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 
 | 폴더 | 들어 있는 것 |
 |---|---|
-| `GameFlow/Start` | `Spawner_1~8`, `HUD_Controller`(기본 HUD 숨김) |
+| `GameFlow/Start` | `Spawner_1~8`, `HUD_Controller`(기본 HUD 숨김), `status_popup`(추락, 리스폰 화면) |
 | `GameFlow/Checkpoints` | `Checkpoint_1~4` |
 | `GameFlow/Finish` | `race_manager`, `Finish_EndGame`, `Finish_Trigger`, `Finish_Score` |
-| `GameFlow/Sound` | `music_manager`, `sfx_manager`와 Audio Player 12개(아래 표) |
+| `GameFlow/Sound` | `music_manager`, `sfx_manager`, Audio Player 13개(아래 표), Audio Mixer 4개(`Mix_Music_Soft/Deep`, `Mix_SFX_Soft/Deep`) |
 | `SeesawHazards` | 시소 위 범퍼 기둥 8개(`SS_Pole_1~8`), 바운서 2개(`BNC_SS_1/2`) |
 
 ### 사운드 장치 이름과 역할 (`GameFlow/Sound`)
 
 | 장치 이름 | 소리 파일 | 재생 시점 | 들리는 대상 | 음량 |
 |---|---|---|---|---|
-| `BGM_Main` | `music_playgame` (60초, 59.95초마다 다시 재생) | 게임 시작, 중간 입장 | 각 플레이어 | 1.8 |
-| `BGM_Low` | `music_playgame` | 골인/챔피언 음악이 나오는 30초 동안 배경음악 대신 | 골인한 사람 | 0.55 |
+| `BGM_Main` | `music_playgame_loop` (66.68초, 맨 앞뒤 0.35초 페이드, 66.33초마다 다음 바퀴를 시작) | 게임 시작, 홀수 바퀴 제외 짝수 바퀴, 중간 입장 | 각 플레이어 | 1.8 |
+| `BGM_Main_B` | `music_playgame_loop` | `BGM_Main`과 번갈아 쓰는 홀수 바퀴(바퀴 사이가 겹쳐 이어짐) | 각 플레이어 | 1.8 |
+| `BGM_Low` | `music_playgame_loop` | 골인/챔피언 음악이 나오는 30초 동안 배경음악 대신 | 골인한 사람 | 0.55 |
 | `SFX_Start_GO` | `sfx_countdown_go` | 레이스 시작 | 전체 | 1.0 |
 | `SFX_Checkpoint` | `sfx_checkpoint` | 체크포인트를 처음 밟을 때 | 밟은 사람 | 1.0 |
 | `SFX_Bounce` | `sfx_bounce` | 플리퍼, 기둥, 주먹에 맞아 튕길 때 | 맞은 사람 | 1.0 |
@@ -51,7 +52,8 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 ## 3. Verse 파일 7개 (장치 5개 + 공통 타입 1개 + 음악 1개)
 
 - `common_types.verse`: 여러 장치가 같이 쓰는 타입(`player_snap`)
-- `music_manager.verse`: 배경음악 시작, 반복, 골인 음악 중 줄이기, 정지. `race_manager`가 호출한다.
+- `music_manager.verse`: 배경음악 시작, 반복(A, B 두 Audio Player를 번갈아 써서 바퀴 사이를 겹쳐 이음), 골인 음악 중 줄이기, 정지, 게임 종료 직전 소리 줄이기(Audio Mixer 단계별). `race_manager`가 호출한다.
+- `status_popup.verse`: 추락하면 `ELIMINATED`, 되살아나기 직전 1.5초 동안 `RESPAWN` 이미지를 화면 가운데에 띄운다(죽어 있는 시간은 로그 기준 3.75초).
 - 아래 `race_manager` 설명 중 음악 관련 부분은 `music_manager`가 맡는다.
 
 
@@ -61,12 +63,13 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 |---|---|
 | 골인 감지 | `WatchFinishLine`이 0.05초마다 결승 아치 구역(상자)에 들어온 플레이어를 찾아 `RegisterFinish`를 호출 |
 | 기록 | `FinishedRank`(순위), `FinishedLeft`(골인 순간 남은 시간), `FinishedSpent`(걸린 시간) |
-| 상단 타이머 | `RunTimer` → `AddMissingTimers` → `UpdateTimers`. 골인한 사람은 그 순간 값에서 멈춤 |
+| 상단 타이머 | `RunTimer` → `AddMissingTimers` → `UpdateTimers`/`SetClock`. `ui_time` 이미지 위에 숫자 글자 이미지 5칸(`Bubble` 폴더)을 얹어 갱신. 골인한 뒤에도 계속 흐름 |
 | 체크포인트 | 체크포인트 4개의 `FirstActivationPerAgentEvent`를 받아 플레이어별 개수를 셈 |
 | 현재 순위 | `RankOf`: 골인한 사람이 앞 → 체크포인트를 많이 지난 사람 → 코스 앞쪽(Y 큰) 사람 |
-| 왼쪽 아래 순위 / 체크포인트 줄 | `UpdateInfo`가 0.2초마다 갱신 |
+| 왼쪽 아래 순위 박스 | `ui_ranking` 이미지 위에 `3RD / 8` 글자 이미지를 얹음. `UpdateInfo`/`SetRank`가 0.2초마다 갱신 |
+| 체크포인트 통과 | `ShowCheckpointPopup`이 `ui_checkpoint`를 화면 가운데에 2초 표시 |
 | 알람 | 남은 시간이 `AlarmSeconds` 이하로 1초 줄 때마다 `PlayAlarm` |
-| 결과 화면 | `ShowResults` → `BuildResultCanvas`, `BuildNeonCanvas`(이탤릭 글자 이미지 조립) |
+| 결과 화면 | 골인: `BuildGoalCanvas`(`ui_goal_in` + `1ST PLACE`, `TIME`), 타임오버: `BuildTimeOverCanvas`(`ui_timeover` + 옅은 붉은색), 골인 후 대기 문구는 `ShowResultFor` |
 | 게임 종료 | `EndRace`가 결과를 보여주고 End Game Device를 작동 |
 
 주요 설정값:
@@ -79,7 +82,9 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 | `AlarmSeconds` | 10 | 알람 시작 시점 |
 | `PlayMusic` | true | 배경음악 사용 여부 |
 | `CheckpointTotal` | 4 | 화면의 `n / 4` 분모 |
-| `TimerTextSize` / `InfoTextSize` / `RankLabelSize` | 96 / 40 / 30 | 화면 글자 크기 |
+| `TimerBoxWidth` / `TimerDigitHeight` | 460 / 66 | 상단 타이머 이미지 폭, 숫자 높이 |
+| `RankBoxWidth` / `RankNumSize` / `RankSuffixSize` / `RankTotalSize` / `RankTextYRatio` | 300 / 60 / 30 / 34 / 0.65 | 순위 박스와 글자 크기, 숫자 세로 위치 |
+| `CheckpointPopupWidth` / `GoalImageWidth` / `ResultImageWidth` / `WaitingTextSize` / `TimeOverTintOpacity` | 760 / 860 / 1000 / 48 / 0.22 | 팝업과 결과 화면 크기, 타임오버 붉은빛 진하기 |
 | `HudScale` | 1.0 | 화면 UI 전체 배율(작은 화면에서 줄이기) |
 | `FinishX/Y/Z Min/Max` | (아치 구역) | 결승선 인식 상자(cm) |
 
@@ -134,12 +139,14 @@ Verse 장치의 `@editable` 칸(예: `Music`, `FinishSting`, `Checkpoint1~4`)은
 
 | 위치 | 내용 | 코드 |
 |---|---|---|
-| 위쪽 가운데 | 큰 카운트다운 `4:44` | `AddMissingTimers`의 `Text` |
-| 그 아래 | `CHECKPOINT 1 / 4`(막 밟으면 2초 금색), 골인 후에는 `FINISHED - N LEFT` | `Info` |
-| 왼쪽 아래 | `Ranking` 글자 + `1ST / 4`(ST는 작은 글자) | `RankNum`, `RankSuffix`, `RankTotal` |
-| 화면 전체 | 결과 화면(네온 띠 이미지 + 이탤릭 글자 이미지) | `BuildResultCanvas` |
+| 위쪽 가운데 | `ui_time` 이미지 + 남은 시간(글자 이미지, 1분 미만이면 빨강) | `AddMissingTimers`, `SetClock` |
+| 화면 가운데 | 체크포인트 통과 이미지(2초) | `ShowCheckpointPopup` |
+| 왼쪽 아래 | `ui_ranking` 이미지 + `1ST / 4`(순위 숫자는 크게, ST와 인원수는 작게) | `AddMissingTimers`, `SetRank` |
+| 화면 가운데 | 골인 화면, 타임오버 화면(붉은빛), 골인 후 `WAITING FOR OTHERS N LEFT` | `BuildGoalCanvas`, `BuildTimeOverCanvas` |
+| 화면 가운데 | 추락 `ELIMINATED`, 되살아나기 직전 `RESPAWN` | `status_popup.verse` |
 
-- 결과 화면의 이탤릭 글자는 UEFN UI가 이탤릭을 지원하지 않아서, 글자를 이미지(`Italic` 폴더)로 만들어 조립한 것입니다.
+- UEFN UI의 글자(`text_block`)는 글꼴을 고를 수 없어서, 시간, 순위, 결과 글자는 글꼴 이미지(`Bubble` 폴더: 숫자, 콜론, 슬래시, 영문 대문자)를 한 글자씩 끼워 만듭니다. 예전 `Italic` 폴더와 `result_success`, `result_fail`은 지금은 쓰지 않습니다.
+- 이미지 안에 이미 들어 있는 글자(`TIME`, `Ranking`, `CHECKPOINT!` 등)는 그대로 두고, 코드가 넣는 숫자와 문구만 글꼴 이미지를 씁니다.
 - 화면 크기에 따라 글자가 너무 크면 `HudScale`을 줄입니다.
 
 ## 7. 성능에 대해
