@@ -143,6 +143,31 @@ flipper_knockback := class(creative_device):
     @editable
     PoleZAboveCm:float = 500.0
 
+    # 기둥이 회전판 중심으로 모였다가 퍼지는 움직임. 회전판 중심(cm), 회전판이 한 바퀴 도는 시간(PM_Turntable_Base와 같은 20초),
+    # 모였다가 퍼지는 한 주기(초), 기둥 중심이 움직이는 범위(중심에서의 거리, cm), 움직임 갱신 간격과 미리 가는 시간(초).
+    # 범위는 파란 바닥 안쪽만 쓰도록 정했다: 가운데 빨간 원(반지름 약 515) 바깥 + 기둥 반지름 103 + 여유 = 660,
+    # 파란 바닥 바깥 가장자리(반지름 약 1410) 안쪽 − 기둥 반지름 − 여유 = 1280.
+    @editable
+    TurntableCenter:vector3 = vector3{X := 444.0, Y := 7996.0, Z := 0.0}
+
+    @editable
+    TurntableSeconds:float = 20.0
+
+    @editable
+    PulseSeconds:float = 8.0
+
+    @editable
+    PoleMinRadiusCm:float = 660.0
+
+    @editable
+    PoleMaxRadiusCm:float = 1280.0
+
+    @editable
+    PoleStepSeconds:float = 0.1
+
+    @editable
+    PoleLookaheadSeconds:float = 0.15
+
     # 주먹 프롭 기준점(손목 쪽 끝)에서 끝면까지의 길이, 면의 좌우 반폭, 기준점 높이 기준 아래/위 범위 (cm).
     @editable
     FistTipLengthCm:float = 1959.0
@@ -179,6 +204,8 @@ flipper_knockback := class(creative_device):
             Binding := fist_binding{Owner := Self, Mover := M}
             M.AgentHitEvent.Subscribe(Binding.OnHit)
         Print("flipper_knockback: flippers={FlipperStates.Length} poles={PoleStates.Length} fists={Fists.Length} bouncers={Bouncers.Length}")
+        for (Pole : Poles):
+            spawn{PulsePole(Pole)}
         loop:
             Sleep(TickSeconds)
             RefreshSnaps()
@@ -188,6 +215,31 @@ flipper_knockback := class(creative_device):
                 CheckPole(S)
             for (F : Fists):
                 CheckFist(F)
+
+    # 기둥 하나를 회전판과 같은 속도로 돌리면서, 회전판 중심으로 모였다가 다시 퍼지게 한다.
+    # 시작 위치의 각도를 기준으로 하고, 시소와 같은 방식(앞으로 갈 자리를 MoveTo)으로 움직인다.
+    # 중심에서의 거리는 파란 바닥 범위(PoleMinRadiusCm ~ PoleMaxRadiusCm) 안에서만 오가고, 시작할 때 튀지 않도록 현재 거리에서 이어서 시작한다.
+    PulsePole(Pole:creative_prop)<suspends>:void =
+        Start := Pole.GetTransform()
+        DX := Start.Translation.X - TurntableCenter.X
+        DY := Start.Translation.Y - TurntableCenter.Y
+        NearCm := PoleMinRadiusCm
+        FarCm := Max(PoleMaxRadiusCm, PoleMinRadiusCm + 1.0)
+        Spread0 := Max(0.0, Min(1.0, (Sqrt(DX * DX + DY * DY) - NearCm) / (FarCm - NearCm)))
+        Phase0 := ArcCos(2.0 * Spread0 - 1.0)
+        Angle0 := ArcTan(DY, DX)
+        T0 := GetSimulationElapsedTime()
+        loop:
+            T := GetSimulationElapsedTime() - T0 + PoleLookaheadSeconds
+            Angle := Angle0 + 2.0 * PiFloat * T / TurntableSeconds
+            Spread := 0.5 + 0.5 * Cos(2.0 * PiFloat * T / PulseSeconds + Phase0)
+            R := NearCm + (FarCm - NearCm) * Spread
+            Pos := vector3{X := TurntableCenter.X + R * Cos(Angle), Y := TurntableCenter.Y + R * Sin(Angle), Z := Start.Translation.Z}
+            spawn{MovePole(Pole, Pos, Start.Rotation)}
+            Sleep(PoleStepSeconds)
+
+    MovePole(Pole:creative_prop, Pos:vector3, Rot:rotation)<suspends>:void =
+        Pole.MoveTo(Pos, Rot, PoleLookaheadSeconds)
 
     # 살아 있는 플레이어의 현재 위치를 한 번에 읽어 둔다.
     RefreshSnaps():void =

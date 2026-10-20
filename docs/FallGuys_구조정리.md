@@ -23,10 +23,11 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 
 | 폴더 | 들어 있는 것 |
 |---|---|
-| `GameFlow/Start` | `Spawner_1~8`, `HUD_Controller`(기본 HUD 숨김), `status_popup`(추락, 리스폰 화면) |
+| `GameFlow/Start` | `Spawner_1~16`(8개씩 2줄, 모두 코스 쪽을 봄), `HUD_Controller`(기본 HUD 숨김), `status_popup`(추락, 리스폰 화면) |
 | `GameFlow/Checkpoints` | `Checkpoint_1~4` |
 | `GameFlow/Finish` | `race_manager`, `Finish_EndGame`, `Finish_Trigger`, `Finish_Score` |
 | `GameFlow/Sound` | `music_manager`, `sfx_manager`, Audio Player 13개(아래 표), Audio Mixer 4개(`Mix_Music_Soft/Deep`, `Mix_SFX_Soft/Deep`) |
+| `GameFlow/EndCamera` | `end_camera`, 고정 위치 카메라 `EndCam_1~16`(플레이어마다 하나) |
 | `SeesawHazards` | 시소 위 범퍼 기둥 8개(`SS_Pole_1~8`), 바운서 2개(`BNC_SS_1/2`) |
 
 ### 사운드 장치 이름과 역할 (`GameFlow/Sound`)
@@ -49,10 +50,11 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 
 소리 파일은 `FallGuys_Sample/Audio` 폴더에 있고, 원본 wav는 `FallGuys_Test/sfx/`에 보관되어 있습니다.
 
-## 3. Verse 파일 7개 (장치 5개 + 공통 타입 1개 + 음악 1개)
+## 3. Verse 파일 9개 (장치 7개 + 공통 타입 1개 + 음악 1개)
 
 - `common_types.verse`: 여러 장치가 같이 쓰는 타입(`player_snap`)
 - `music_manager.verse`: 배경음악 시작, 반복(A, B 두 Audio Player를 번갈아 써서 바퀴 사이를 겹쳐 이음), 골인 음악 중 줄이기, 정지, 게임 종료 직전 소리 줄이기(Audio Mixer 단계별). `race_manager`가 호출한다.
+- `end_camera.verse`: 골인하거나 타임오버가 되면 그 플레이어의 카메라가 캐릭터 가까이 다가가며 아래에서 올려다보는 각도로 캐릭터 둘레를 2바퀴 돈다. 2바퀴 도는 시간은 `race_manager`의 `ResultSeconds`(7초)와 같아서 게임이 끝날 때 딱 맞는다. 플레이어마다 `EndCam` 장치 하나를 배정해 Verse가 `MoveTo`로 옮긴다. 먼저 골인한 플레이어는 2바퀴를 돈 뒤 멈춘 각도로 캐릭터를 따라간다. UI는 그대로다.
 - `status_popup.verse`: 추락하면 `ELIMINATED`, 되살아나기 직전 1.5초 동안 `RESPAWN` 이미지를 화면 가운데에 띄운다(죽어 있는 시간은 로그 기준 3.75초).
 - 아래 `race_manager` 설명 중 음악 관련 부분은 `music_manager`가 맡는다.
 
@@ -91,6 +93,7 @@ UEFN으로 만든 폴가이즈 스타일 장애물 레이스 맵의 구성을 �
 ### 3.2 `flipper_knockback.verse` (336줄) — 플리퍼, 기둥, 주먹 튕김
 
 - 플리퍼 4개, 기둥 6개, 주먹 6개와 플레이어의 거리를 틱마다 검사합니다.
+- 회전판 위 기둥 6개는 `PulsePole`이 움직입니다. 회전판(20초에 한 바퀴)과 같은 속도로 돌면서 8초 주기로 중심 쪽으로 모였다가 퍼지고, 중심에서의 거리는 파란 바닥 범위(660~1280cm) 안으로 제한됩니다. 기존 `PM_Turntable_Pole_1~6` 무버는 "시작 시 움직임"을 꺼 두었습니다.
 - 닿으면 **바운서 장치를 플레이어 발밑으로 순간이동**시켜 위로 튕기는 방식입니다. 캐릭터를 직접 순간이동시키면 카메라가 리셋되기 때문에 이 방법을 씁니다.
 - 틱 시작에 플레이어 위치를 **한 번만** 읽어 모든 장애물이 같이 씁니다(`RefreshSnaps`).
 - 주요 설정값: `TickSeconds` 0.03(검사 간격), `ActiveSeconds` 0.35(바운서가 그 자리에 머무는 시간).

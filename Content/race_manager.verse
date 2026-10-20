@@ -59,6 +59,10 @@ race_manager := class(creative_device):
     @editable
     MusicManager:music_manager = music_manager{}
 
+    # 골인하거나 시간이 끝난 플레이어의 카메라가 캐릭터 주변을 도는 연출을 맡는 장치.
+    @editable
+    EndCamera:end_camera = end_camera{}
+
     # 배경음악을 틀지 여부. 효과음만 따로 확인할 때 false로 둔다.
     @editable
     PlayMusic:logic = true
@@ -232,6 +236,7 @@ race_manager := class(creative_device):
     OnRoundStart()<suspends>:void =
         # 이전 라운드 끝에 줄였던 소리를 원래대로 되돌린다.
         MusicManager.ResetFade()
+        EndCamera.StopAll()
         set RaceStart = GetSimulationElapsedTime()
         for (Player : GetPlayspace().GetPlayers()):
             StartSfx.Play(Player)
@@ -277,6 +282,7 @@ race_manager := class(creative_device):
             # 골인한 플레이어에게는 결과 화면을 바로 보여준다(다른 사람이 끝날 때까지 남은 인원도 같이 표시).
             if (Player := player[Agent]):
                 ShowResultFor(Player)
+                EndCamera.Start(Player, ResultSeconds)
             CheckAllFinished()
 
     # 골인한 플레이어에게만 골인 음악을 틀어준다. 1등은 챔피언 음악, 나머지는 골인 음악이고(겹치지 않게 하나만),
@@ -360,6 +366,9 @@ race_manager := class(creative_device):
             set GameEnded = true
             Print("race_manager: race over, showing results")
             ShowResults()
+            # 아직 골인하지 못한 플레이어(타임오버)도 카메라가 캐릭터 주변을 돌기 시작한다. 이미 돌고 있는 플레이어는 그대로 둔다.
+            for (Player : GetPlayspace().GetPlayers()):
+                EndCamera.Start(Player, ResultSeconds)
             # 결과 화면 시간(ResultSeconds) 안에서, 게임을 끝내기 직전 FadeSeconds 동안 소리를 단계로 줄인다. 총 시간은 바뀔지 않는다.
             Sleep(Max(0.0, ResultSeconds - MusicManager.FadeSeconds))
             MusicManager.FadeOut()
